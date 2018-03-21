@@ -17,6 +17,16 @@ Parameters:
     Default: "10.0.3.0/16"
     Description: "CIDR block for the Private Subnet on AZ3"
     Type: "String"
+  Image:
+    Description: "EC2 ami to be used"
+    Type: "String"
+  KeyPairName:
+    Description: "SSH Key to asign to the EC2 instances"
+    Type: "String"
+  MasterInstanceType:
+    Default: "m4.xlarge"
+    Description: "The instance type to be used"
+    Type: "String"
   #PublicSubnet1CIDR:
   #PublicSubnet2CIDR:
   #PublicSubnet3CIDR:
@@ -28,7 +38,7 @@ Parameters:
   #NumberOfNodes:
   #NumberOfInfra:
   #NumberOfCNS:
-  #MasterInstanceType:
+  
   #EtcdInstanceType:
   #NodesInstanceType:
   #InfraInstanceType:
@@ -219,15 +229,19 @@ Resources:
       Tags:
       - Key: 'Name'
         Value: 'casl-cluster-env'
-  eycdsg:
+  etcdsg:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: ETCD Nodes Security Group
       VpcId: !Ref VPC
       SecurityGroupIngress:
       - IpProtocol: tcp
-        FromPort: '22'
-        ToPort: '22'
+        FromPort: '2379'
+        ToPort: '2379'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '2380'
+        ToPort: '2380'
         CidrIp: 0.0.0.0/0
       SecurityGroupEgress:
       - IpProtocol: tcp
@@ -237,6 +251,144 @@ Resources:
       Tags:
       - Key: 'Name'
         Value: 'casl-cluster-env'
+  cnssg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Gluster Nodes Security Group
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '24007'
+        ToPort: '24007'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '24008'
+        ToPort: '24008'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '2222'
+        ToPort: '2222'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '49152'
+        ToPort: '49664'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '24010'
+        ToPort: '24010'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '3260'
+        ToPort: '3260'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '111'
+        ToPort: '111'
+        CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: '0'
+        ToPort: '65535'
+        CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: 'Name'
+        Value: 'casl-cluster-env'
+  Master01: 
+    Type: "AWS::EC2::Instance"
+    Properties: 
+      ImageId: !Ref Image
+      KeyName: !Ref KeyPairName
+      InstanceType: !Ref MasterInstanceType
+      SecurityGroups:
+        - etcdsg
+        - nodesg
+        - mastersg
+      Tags:
+        - Key: 'Name'
+          Value: 'master01'
+        - Key: 'ocp_role'
+          Value: 'master etcd'
+        - Key: 'env_id'
+          Value: 'casl-cluster-env'
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: "" 
+      BlockDeviceMappings: 
+        - DeviceName: "/dev/sda1"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "50"
+        - DeviceName: "/dev/xvdb"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "40"
+  Master02: 
+    Type: "AWS::EC2::Instance"
+    Properties: 
+      ImageId: !Ref Image
+      KeyName: !Ref KeyPairName
+      InstanceType: !Ref MasterInstanceType
+      SecurityGroups:
+        - etcdsg
+        - nodesg
+        - mastersg
+      Tags:
+        - Key: 'Name'
+          Value: 'master02'
+        - Key: 'ocp_role'
+          Value: 'master etcd'
+        - Key: 'env_id'
+          Value: 'casl-cluster-env'
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: "" 
+      BlockDeviceMappings: 
+        - DeviceName: "/dev/sda1"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "50"
+        - DeviceName: "/dev/xvdb"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "40"
+  Master03: 
+    Type: "AWS::EC2::Instance"
+    Properties: 
+      ImageId: !Ref Image
+      KeyName: !Ref KeyPairName
+      InstanceType: !Ref MasterInstanceType
+      SecurityGroups:
+        - etcdsg
+        - nodesg
+        - mastersg
+      Tags:
+        - Key: 'Name'
+          Value: 'master03'
+        - Key: 'ocp_role'
+          Value: 'master etcd'
+        - Key: 'env_id'
+          Value: 'casl-cluster-env'
+      AvailabilityZone:
+        Fn::Select:
+          - 2
+          - Fn::GetAZs: "" 
+      BlockDeviceMappings: 
+        - DeviceName: "/dev/sda1"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "50"
+        - DeviceName: "/dev/xvdb"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "40"
 Outputs:
   VpcId:
     Value: !Ref VPC

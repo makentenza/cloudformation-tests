@@ -15,6 +15,9 @@
         PrivateSubnet1CIDR: "10.20.1.0/24"
         PrivateSubnet2CIDR: "10.20.2.0/24"
         PrivateSubnet3CIDR: "10.20.3.0/24"
+        Image: "ami-b3d841dc"
+        KeyPairName: "mak-eu-central-1"
+        MasterInstanceType: "m4.xlarge"
         #PublicSubnet1CIDR:
         #PublicSubnet2CIDR:
         #PublicSubnet3CIDR:
@@ -26,7 +29,7 @@
         # NumberOfNodes:
         # NumberOfInfra:
         # NumberOfCNS:
-        # MasterInstanceType:
+        
         # EtcdInstanceType:
         # NodesInstanceType:
         # InfraInstanceType:
