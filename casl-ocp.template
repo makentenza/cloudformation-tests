@@ -115,6 +115,7 @@
         "AvailabilityZones": {
             "Description": "List of Availability Zones to use for the subnets in the VPC. Three Availability Zones are used for this deployment, and the logical order of your selections is preserved.",
             "Type": "List<AWS::EC2::AvailabilityZone::Name>"
+            }
         },
         "KeyPairName": {
             "Description": "The name of an existing public/private key pair, which allows you to securely connect to your instance after it launches",
