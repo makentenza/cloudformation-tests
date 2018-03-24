@@ -1,16 +1,15 @@
 ---
-- name: Create a new CloudFormation Stack
+- name: Manage the CloudFormation Stack
   hosts: localhost
   tasks:
 
-  - name: Create underlaying Infrastructure
+  - name: Ensure the underlaying Infrastructure is {{ action }}
     cloudformation:
       stack_name: "test-mak"
       state: "{{ action }}"
       region: "eu-central-1"
       template: "casl-aws-ocp.template.yaml"
       template_parameters:
-        #AvailabilityZones:
         VPCCIDR: "10.20.0.0/16"
         PrivateSubnet1CIDR: "10.20.1.0/24"
         PrivateSubnet2CIDR: "10.20.2.0/24"
@@ -18,24 +17,11 @@
         Image: "ami-b3d841dc"
         KeyPairName: "mak-eu-central-1"
         MasterInstanceType: "m4.xlarge"
-        #PublicSubnet1CIDR:
-        #PublicSubnet2CIDR:
-        #PublicSubnet3CIDR:
-        # RemoteAccessCIDR:
-        # ContainerAccessCIDR:
-        # KeyPairName:
-        # NumberOfMaster:
-        # NumberOfEtcd:
-        # NumberOfNodes:
-        # NumberOfInfra:
-        # NumberOfCNS:
-        
-        # EtcdInstanceType:
-        # NodesInstanceType:
-        # InfraInstanceType:
-        # CNSInstanceType:
-#
-#
+        EtcdInstanceType: "m4.xlarge"
+        NodesInstanceType: "m4.xlarge"
+        InfraInstanceType: "i3.xlarge"
+        CNSInstanceType: "i3.xlarge"
+        MasterApiPort: "443"
         # Region: "{{ region }}"
         # Route53HostedZone: "{{ public_hosted_zone }}."
         # PublicHostedZone: "{{ public_hosted_zone }}"

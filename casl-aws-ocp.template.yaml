@@ -27,6 +27,26 @@ Parameters:
     Default: "m4.xlarge"
     Description: "The instance type to be used"
     Type: "String"
+  EtcdInstanceType:
+    Default: "m4.xlarge"
+    Description: "The instance type to be used"
+    Type: "String"
+  NodesInstanceType:
+    Default: "m4.xlarge"
+    Description: "The instance type to be used"
+    Type: "String"
+  InfraInstanceType:
+    Default: "i3.xlarge"
+    Description: "The instance type to be used"
+    Type: "String"
+  CNSInstanceType:
+    Default: "i3.xlarge"
+    Description: "The instance type to be used"
+    Type: "String"
+  MasterApiPort:
+    Default: "443"
+    Description: "Exposed OpenShift API port number"
+    Type: "String"
   #PublicSubnet1CIDR:
   #PublicSubnet2CIDR:
   #PublicSubnet3CIDR:
@@ -39,10 +59,7 @@ Parameters:
   #NumberOfInfra:
   #NumberOfCNS:
   
-  #EtcdInstanceType:
-  #NodesInstanceType:
-  #InfraInstanceType:
-  #CNSInstanceType:
+  
 Resources:
   VPC:
     Type: "AWS::EC2::VPC"
@@ -110,6 +127,12 @@ Resources:
       Tags:
       - Key: 'Name'
         Value: 'casl-cluster-env'
+  RouteInternetGW:
+    Type: "AWS::EC2::Route"
+    Properties: 
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
   SubnetAZ1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -125,9 +148,52 @@ Resources:
     Properties:
       SubnetId: !Ref SubnetAZ3
       RouteTableId: !Ref RouteTable
+  apielbsg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: apielbsg
+      GroupDescription: Master API LB Security Group
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: !Ref MasterApiPort
+        ToPort: !Ref MasterApiPort
+        CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: '0'
+        ToPort: '65535'
+        CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: 'Name'
+        Value: 'casl-cluster-env'
+  infraelbsg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: infraelbsg
+      GroupDescription: Routers LB Security Group
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '443'
+        ToPort: '443'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: '0'
+        ToPort: '65535'
+        CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: 'Name'
+        Value: 'casl-cluster-env'
   mastersg:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: mastersg
       GroupDescription: Master Nodes Security Group
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -140,8 +206,8 @@ Resources:
         ToPort: '8053'
         CidrIp: 0.0.0.0/0
       - IpProtocol: tcp
-        FromPort: '8443'
-        ToPort: '8443'
+        FromPort: !Ref MasterApiPort
+        ToPort: !Ref MasterApiPort
         CidrIp: 0.0.0.0/0
       - IpProtocol: udp
         FromPort: '53'
@@ -170,6 +236,7 @@ Resources:
   infrasg:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: infrasg
       GroupDescription: Infrastructure Nodes Security Group
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -192,6 +259,7 @@ Resources:
   nodesg:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: nodesg
       GroupDescription: Compute Nodes Security Group
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -214,6 +282,7 @@ Resources:
   sshsg:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: sshsg
       GroupDescription: SSH Server Security Group
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -232,6 +301,7 @@ Resources:
   etcdsg:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: etcdsg
       GroupDescription: ETCD Nodes Security Group
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -254,6 +324,7 @@ Resources:
   cnssg:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: cnssg
       GroupDescription: Gluster Nodes Security Group
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -299,15 +370,17 @@ Resources:
       ImageId: !Ref Image
       KeyName: !Ref KeyPairName
       InstanceType: !Ref MasterInstanceType
-      SecurityGroups:
-        - etcdsg
-        - nodesg
-        - mastersg
+      SubnetId : !Ref SubnetAZ1
+      SecurityGroupIds:
+        - !GetAtt etcdsg.GroupId
+        - !GetAtt nodesg.GroupId
+        - !GetAtt mastersg.GroupId
+        - !GetAtt sshsg.GroupId
       Tags:
         - Key: 'Name'
           Value: 'master01'
         - Key: 'ocp_role'
-          Value: 'master etcd'
+          Value: 'master'
         - Key: 'env_id'
           Value: 'casl-cluster-env'
       AvailabilityZone:
@@ -331,15 +404,17 @@ Resources:
       ImageId: !Ref Image
       KeyName: !Ref KeyPairName
       InstanceType: !Ref MasterInstanceType
-      SecurityGroups:
-        - etcdsg
-        - nodesg
-        - mastersg
+      SubnetId : !Ref SubnetAZ2
+      SecurityGroupIds:
+        - !GetAtt etcdsg.GroupId
+        - !GetAtt nodesg.GroupId
+        - !GetAtt mastersg.GroupId
+        - !GetAtt sshsg.GroupId
       Tags:
         - Key: 'Name'
           Value: 'master02'
         - Key: 'ocp_role'
-          Value: 'master etcd'
+          Value: 'master'
         - Key: 'env_id'
           Value: 'casl-cluster-env'
       AvailabilityZone:
@@ -363,15 +438,17 @@ Resources:
       ImageId: !Ref Image
       KeyName: !Ref KeyPairName
       InstanceType: !Ref MasterInstanceType
-      SecurityGroups:
-        - etcdsg
-        - nodesg
-        - mastersg
+      SubnetId : !Ref SubnetAZ3
+      SecurityGroupIds:
+        - !GetAtt etcdsg.GroupId
+        - !GetAtt nodesg.GroupId
+        - !GetAtt mastersg.GroupId
+        - !GetAtt sshsg.GroupId
       Tags:
         - Key: 'Name'
           Value: 'master03'
         - Key: 'ocp_role'
-          Value: 'master etcd'
+          Value: 'master'
         - Key: 'env_id'
           Value: 'casl-cluster-env'
       AvailabilityZone:
@@ -389,6 +466,449 @@ Resources:
             VolumeType: "gp2"
             DeleteOnTermination: "true"
             VolumeSize: "40"
+  ETCD01: 
+    Type: "AWS::EC2::Instance"
+    Properties: 
+      ImageId: !Ref Image
+      KeyName: !Ref KeyPairName
+      InstanceType: !Ref EtcdInstanceType
+      SubnetId : !Ref SubnetAZ1
+      SecurityGroupIds:
+        - !GetAtt etcdsg.GroupId
+        - !GetAtt nodesg.GroupId
+        - !GetAtt sshsg.GroupId
+      Tags:
+        - Key: 'Name'
+          Value: 'etcd01'
+        - Key: 'ocp_role'
+          Value: 'etcd'
+        - Key: 'env_id'
+          Value: 'casl-cluster-env'
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: "" 
+      BlockDeviceMappings: 
+        - DeviceName: "/dev/sda1"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "50"
+        - DeviceName: "/dev/xvdb"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "40"
+  ETCD02: 
+    Type: "AWS::EC2::Instance"
+    Properties: 
+      ImageId: !Ref Image
+      KeyName: !Ref KeyPairName
+      InstanceType: !Ref EtcdInstanceType
+      SubnetId : !Ref SubnetAZ2
+      SecurityGroupIds:
+        - !GetAtt etcdsg.GroupId
+        - !GetAtt nodesg.GroupId
+        - !GetAtt sshsg.GroupId
+      Tags:
+        - Key: 'Name'
+          Value: 'etcd02'
+        - Key: 'ocp_role'
+          Value: 'etcd'
+        - Key: 'env_id'
+          Value: 'casl-cluster-env'
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: "" 
+      BlockDeviceMappings: 
+        - DeviceName: "/dev/sda1"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "50"
+        - DeviceName: "/dev/xvdb"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "40"
+  ETCD03: 
+    Type: "AWS::EC2::Instance"
+    Properties: 
+      ImageId: !Ref Image
+      KeyName: !Ref KeyPairName
+      InstanceType: !Ref EtcdInstanceType
+      SubnetId : !Ref SubnetAZ3
+      SecurityGroupIds:
+        - !GetAtt etcdsg.GroupId
+        - !GetAtt nodesg.GroupId
+        - !GetAtt sshsg.GroupId
+      Tags:
+        - Key: 'Name'
+          Value: 'etcd03'
+        - Key: 'ocp_role'
+          Value: 'etcd'
+        - Key: 'env_id'
+          Value: 'casl-cluster-env'
+      AvailabilityZone:
+        Fn::Select:
+          - 2
+          - Fn::GetAZs: "" 
+      BlockDeviceMappings: 
+        - DeviceName: "/dev/sda1"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "50"
+        - DeviceName: "/dev/xvdb"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "40"
+  Infra01: 
+    Type: "AWS::EC2::Instance"
+    Properties: 
+      ImageId: !Ref Image
+      KeyName: !Ref KeyPairName
+      InstanceType: !Ref InfraInstanceType
+      SubnetId : !Ref SubnetAZ1
+      SecurityGroupIds:
+        - !GetAtt nodesg.GroupId
+        - !GetAtt infrasg.GroupId
+        - !GetAtt sshsg.GroupId
+      Tags:
+        - Key: 'Name'
+          Value: 'infra01'
+        - Key: 'ocp_role'
+          Value: 'infranode'
+        - Key: 'env_id'
+          Value: 'casl-cluster-env'
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: "" 
+      BlockDeviceMappings: 
+        - DeviceName: "/dev/sda1"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "50"
+        - DeviceName: "/dev/xvdb"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "40"
+  Infra02: 
+    Type: "AWS::EC2::Instance"
+    Properties: 
+      ImageId: !Ref Image
+      KeyName: !Ref KeyPairName
+      InstanceType: !Ref InfraInstanceType
+      SubnetId : !Ref SubnetAZ2
+      SecurityGroupIds:
+        - !GetAtt nodesg.GroupId
+        - !GetAtt infrasg.GroupId
+        - !GetAtt sshsg.GroupId
+      Tags:
+        - Key: 'Name'
+          Value: 'infra02'
+        - Key: 'ocp_role'
+          Value: 'infranode'
+        - Key: 'env_id'
+          Value: 'casl-cluster-env'
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: "" 
+      BlockDeviceMappings: 
+        - DeviceName: "/dev/sda1"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "50"
+        - DeviceName: "/dev/xvdb"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "40"
+  Infra03: 
+    Type: "AWS::EC2::Instance"
+    Properties: 
+      ImageId: !Ref Image
+      KeyName: !Ref KeyPairName
+      InstanceType: !Ref InfraInstanceType
+      SubnetId : !Ref SubnetAZ3
+      SecurityGroupIds:
+        - !GetAtt nodesg.GroupId
+        - !GetAtt infrasg.GroupId
+        - !GetAtt sshsg.GroupId
+      Tags:
+        - Key: 'Name'
+          Value: 'infra03'
+        - Key: 'ocp_role'
+          Value: 'infranode'
+        - Key: 'env_id'
+          Value: 'casl-cluster-env'
+      AvailabilityZone:
+        Fn::Select:
+          - 2
+          - Fn::GetAZs: "" 
+      BlockDeviceMappings: 
+        - DeviceName: "/dev/sda1"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "50"
+        - DeviceName: "/dev/xvdb"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "40"
+  Node01: 
+    Type: "AWS::EC2::Instance"
+    Properties: 
+      ImageId: !Ref Image
+      KeyName: !Ref KeyPairName
+      InstanceType: !Ref NodesInstanceType
+      SubnetId : !Ref SubnetAZ1
+      SecurityGroupIds:
+        - !GetAtt nodesg.GroupId
+        - !GetAtt sshsg.GroupId
+      Tags:
+        - Key: 'Name'
+          Value: 'node01'
+        - Key: 'ocp_role'
+          Value: 'computenode'
+        - Key: 'env_id'
+          Value: 'casl-cluster-env'
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: "" 
+      BlockDeviceMappings: 
+        - DeviceName: "/dev/sda1"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "50"
+        - DeviceName: "/dev/xvdb"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "40"
+  Node02: 
+    Type: "AWS::EC2::Instance"
+    Properties: 
+      ImageId: !Ref Image
+      KeyName: !Ref KeyPairName
+      InstanceType: !Ref NodesInstanceType
+      SubnetId : !Ref SubnetAZ2
+      SecurityGroupIds:
+        - !GetAtt nodesg.GroupId
+        - !GetAtt sshsg.GroupId
+      Tags:
+        - Key: 'Name'
+          Value: 'node02'
+        - Key: 'ocp_role'
+          Value: 'computenode'
+        - Key: 'env_id'
+          Value: 'casl-cluster-env'
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: "" 
+      BlockDeviceMappings: 
+        - DeviceName: "/dev/sda1"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "50"
+        - DeviceName: "/dev/xvdb"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "40"
+  CNS01: 
+    Type: "AWS::EC2::Instance"
+    Properties: 
+      ImageId: !Ref Image
+      KeyName: !Ref KeyPairName
+      InstanceType: !Ref CNSInstanceType
+      SubnetId : !Ref SubnetAZ1
+      SecurityGroupIds:
+        - !GetAtt nodesg.GroupId
+        - !GetAtt sshsg.GroupId
+        - !GetAtt cnssg.GroupId
+      Tags:
+        - Key: 'Name'
+          Value: 'cns01'
+        - Key: 'ocp_role'
+          Value: 'cnsnode'
+        - Key: 'env_id'
+          Value: 'casl-cluster-env'
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: "" 
+      BlockDeviceMappings: 
+        - DeviceName: "/dev/sda1"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "50"
+        - DeviceName: "/dev/xvdb"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "40"
+        - DeviceName: "/dev/xvdc"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "200"
+  CNS02: 
+    Type: "AWS::EC2::Instance"
+    Properties: 
+      ImageId: !Ref Image
+      KeyName: !Ref KeyPairName
+      InstanceType: !Ref CNSInstanceType
+      SubnetId : !Ref SubnetAZ2
+      SecurityGroupIds:
+        - !GetAtt nodesg.GroupId
+        - !GetAtt sshsg.GroupId
+        - !GetAtt cnssg.GroupId
+      Tags:
+        - Key: 'Name'
+          Value: 'cns02'
+        - Key: 'ocp_role'
+          Value: 'cnsnode'
+        - Key: 'env_id'
+          Value: 'casl-cluster-env'
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: "" 
+      BlockDeviceMappings: 
+        - DeviceName: "/dev/sda1"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "50"
+        - DeviceName: "/dev/xvdb"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "40"
+        - DeviceName: "/dev/xvdc"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "200"
+  CNS03: 
+    Type: "AWS::EC2::Instance"
+    Properties: 
+      ImageId: !Ref Image
+      KeyName: !Ref KeyPairName
+      InstanceType: !Ref CNSInstanceType
+      SubnetId : !Ref SubnetAZ3
+      SecurityGroupIds:
+        - !GetAtt nodesg.GroupId
+        - !GetAtt sshsg.GroupId
+        - !GetAtt cnssg.GroupId
+      Tags:
+        - Key: 'Name'
+          Value: 'cns03'
+        - Key: 'ocp_role'
+          Value: 'cnsnode'
+        - Key: 'env_id'
+          Value: 'casl-cluster-env'
+      AvailabilityZone:
+        Fn::Select:
+          - 2
+          - Fn::GetAZs: "" 
+      BlockDeviceMappings: 
+        - DeviceName: "/dev/sda1"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "50"
+        - DeviceName: "/dev/xvdb"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "40"
+        - DeviceName: "/dev/xvdc"
+          Ebs: 
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "200"
+  MasterExtElb:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      CrossZone: 'true'
+      ConnectionSettings:
+        IdleTimeout: 300
+      Tags:
+      - Key: Name
+        Value: ocp_master_elb
+      - Key: env
+        Value: 'casl-cluster-env'
+      HealthCheck:
+        HealthyThreshold: '2'
+        Interval: '5'
+        Target:
+          Ref: MasterHealthTarget
+        Timeout: '2'
+        UnhealthyThreshold: '2'
+      Listeners:
+      - InstancePort: !Ref MasterApiPort
+        InstanceProtocol: TCP
+        LoadBalancerPort: !Ref MasterApiPort
+        Protocol: TCP
+      SecurityGroups:
+      - !Ref apielbsg
+      Subnets:
+      - !Ref SubnetAZ1
+      - !Ref SubnetAZ2
+      - !Ref SubnetAZ3
+      Instances:
+      - !Ref Master01
+      - !Ref Master02
+      - !Ref Master03
+  InfraElb:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      CrossZone: 'true'
+      Tags:
+      - Key: Name
+        Value: ocp_router_elb
+      - Key: env
+        Value: 'casl-cluster-env'
+      HealthCheck:
+        HealthyThreshold: '2'
+        Interval: '5'
+        Target: TCP:443
+        Timeout: '2'
+        UnhealthyThreshold: '2'
+      Listeners:
+      - InstancePort: '443'
+        InstanceProtocol: TCP
+        LoadBalancerPort: '443'
+        Protocol: TCP
+      - InstancePort: '80'
+        InstanceProtocol: TCP
+        LoadBalancerPort: '80'
+        Protocol: TCP
+      SecurityGroups:
+      - Ref: infraelbsg
+      Subnets:
+      - !Ref SubnetAZ1
+      - !Ref SubnetAZ2
+      - !Ref SubnetAZ3
+      Instances:
+      - !Ref Infra01
+      - !Ref Infra02
+      - !Ref Infra03
 Outputs:
   VpcId:
     Value: !Ref VPC
